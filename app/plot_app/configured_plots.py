@@ -192,8 +192,7 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
     x_range_offset = (ulog.last_timestamp - ulog.start_timestamp) * 0.05
     x_range = Range1d(ulog.start_timestamp - x_range_offset, ulog.last_timestamp + x_range_offset)
 
-
-    # Altitude estimate
+        # Altitude estimate
     data_plot = DataPlot(data, plot_config, 'vehicle_gps_position',
                          y_axis_label='[m]', title='Altitude Estimate',
                          changed_params=changed_params, x_range=x_range)
@@ -792,6 +791,23 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
                         ['X', 'Y', 'Z'])
     if data_plot.finalize() is not None: plots.append(data_plot)
 
+    # magnetic field magnitude
+    data_plot = DataPlot(data, plot_config, magnetometer_ga_topic,
+                         y_axis_label='[gauss]', title='Magnetic Field Magnitude',
+                         plot_height='small', changed_params=changed_params,
+                         x_range=x_range)
+    mag_data = ulog.get_dataset(magnetometer_ga_topic).data
+    mag_magnitude = np.sqrt(mag_data['magnetometer_ga[0]']**2 + 
+                          mag_data['magnetometer_ga[1]']**2 + 
+                          mag_data['magnetometer_ga[2]']**2)
+    mag_data['magnitude'] = mag_magnitude
+    data_plot.add_graph(['magnitude'], colors3[0:1], ['Magnitude'])
+    
+    plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
+    if data_plot.finalize() is not None: 
+        style_plot(data_plot.bokeh_plot)
+        plots.append(data_plot)    
+
 
     # distance sensor
     data_plot = DataPlot(data, plot_config, 'distance_sensor',
@@ -1160,11 +1176,11 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
     except:
         pass
     
-    # Windspeed
+    # Windspeed Components
     try:
         data_plot = DataPlot(data, plot_config, 'wind',
                              y_axis_label='[m/s]',
-                             title='Wind Speed', plot_height='small', x_range=x_range)
+                             title='Wind Speed Components', plot_height='small', x_range=x_range)
         wind_data = ulog.get_dataset('wind').data
         sampling_diff = np.diff(wind_data['timestamp'])
         min_sampling_diff = np.amin(sampling_diff)
@@ -1174,7 +1190,6 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
         data_plot.add_graph(['windspeed_north'], colors3[0:1], ['Wind Speed North'])
         data_plot.add_graph(['windspeed_east'], colors3[1:2], ['Wind Speed East'])
         
-        # Set plot ranges to fit data after adding graphs
         data_plot.bokeh_plot.x_range.start = min(wind_data['timestamp'])
         data_plot.bokeh_plot.x_range.end = max(wind_data['timestamp'])
         data_plot.bokeh_plot.y_range.start = min(min(wind_data['windspeed_north']), 
@@ -1183,6 +1198,56 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
                                               max(wind_data['windspeed_east']))
         plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
         if data_plot.finalize() is not None: 
+            style_plot(data_plot.bokeh_plot)
+            plots.append(data_plot)
+    except:
+        pass
+
+    # Wind Speed Magnitude
+    try:
+        data_plot = DataPlot(data, plot_config, 'wind',
+                             y_axis_label='[m/s]',
+                             title='Wind Speed Magnitude', plot_height='small', x_range=x_range)
+        wind_data = ulog.get_dataset('wind').data
+        
+        # Calculate wind speed magnitude
+        wind_magnitude = np.sqrt(wind_data['windspeed_north']**2 + wind_data['windspeed_east']**2)
+        wind_data['wind_magnitude'] = wind_magnitude
+
+        data_plot.add_graph(['wind_magnitude'], colors3[0:1], ['Wind Speed'])
+        
+        data_plot.bokeh_plot.x_range.start = min(wind_data['timestamp'])
+        data_plot.bokeh_plot.x_range.end = max(wind_data['timestamp'])
+        data_plot.bokeh_plot.y_range.start = 0
+        data_plot.bokeh_plot.y_range.end = max(wind_magnitude) * 1.1
+        
+        plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
+        if data_plot.finalize() is not None:
+            style_plot(data_plot.bokeh_plot)
+            plots.append(data_plot)
+    except:
+        pass
+
+    # Wind Direction
+    try:
+        data_plot = DataPlot(data, plot_config, 'wind',
+                             y_axis_label='[deg]',
+                             title='Wind Direction', plot_height='small', x_range=x_range)
+        wind_data = ulog.get_dataset('wind').data
+        
+        # Calculate wind direction in degrees (0-360)
+        wind_direction = np.degrees(np.arctan2(wind_data['windspeed_east'], wind_data['windspeed_north'])) % 360
+        wind_data['wind_direction'] = wind_direction
+
+        data_plot.add_graph(['wind_direction'], colors3[0:1], ['Wind Direction'])
+        
+        data_plot.bokeh_plot.x_range.start = min(wind_data['timestamp'])
+        data_plot.bokeh_plot.x_range.end = max(wind_data['timestamp'])
+        data_plot.bokeh_plot.y_range.start = 0
+        data_plot.bokeh_plot.y_range.end = 360
+        
+        plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
+        if data_plot.finalize() is not None:
             style_plot(data_plot.bokeh_plot)
             plots.append(data_plot)
     except:
@@ -1290,9 +1355,9 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
     data_plot.add_graph([lambda data: ('alt', vehicle_gps_position_altitude/np.max(np.abs(vehicle_gps_position_altitude)) * 100)],
                         colors3[2:3], ['GPS Altitude [%]'])
     plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
-
-    if data_plot.finalize() is not None: plots.append(data_plot)
-    
+    if data_plot.finalize() is not None:
+        style_plot(data_plot.bokeh_plot)
+        plots.append(data_plot)
     
     param_changes_button = Button(label="Hide Parameter Changes", width=170)
     param_change_labels = []

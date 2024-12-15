@@ -160,7 +160,7 @@ def create_gigaplot(ulog_paths):
     color.on_change("value", update)
 
     size_search = TextInput(prefix="Size")
-    size = Select(value=f"{ulog_paths[0].stem}_vehicle_gps_position_vel_m_s", options=["None"] + continuous, margin=(-5,5,15,5))
+    size = Select(value="None", options=["None"] + continuous, margin=(-5,5,15,5))
     size_search.on_change("value", lambda attr, old, new: update_dropdown(attr, old, new, size_search, size, ["None"] + continuous))
     size.on_change("value", update)
 
