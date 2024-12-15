@@ -1,5 +1,6 @@
 """ module that gets executed on a plotting page request """
 
+from pathlib import Path
 from timeit import default_timer as timer
 import sys
 import sqlite3
@@ -19,6 +20,8 @@ from db_entry import *
 from configured_plots import generate_plots
 from pid_analysis_plots import get_pid_analysis_plots
 from statistics_plots import StatisticsPlots
+from gigaplot import create_gigaplot
+
 
 #pylint: disable=invalid-name, redefined-outer-name
 
@@ -227,8 +230,17 @@ else:
             link_to_pid_analysis_page = '?plots=pid_analysis&log='+log_id
 
             try:
-                plots = generate_plots(ulog, px4_ulog, db_data, vehicle_data,
-                                       link_to_3d_page, link_to_pid_analysis_page)
+                ulog_dir = Path(get_log_filepath())  # Use your log file directory
+                ulog_paths = list(ulog_dir.glob("*.ulg"))
+
+                # Create gigaplot first
+                gigaplot_layout = create_gigaplot(ulog_paths)
+                plots = [gigaplot_layout]
+
+                # Add the rest of the plots
+                plots.extend(generate_plots(ulog, px4_ulog, db_data, vehicle_data,
+                                       link_to_3d_page, link_to_pid_analysis_page))
+
 
                 title = 'Flight Review - '+px4_ulog.get_mav_type()
 
