@@ -3,6 +3,8 @@
 import re
 from html import escape
 
+import pandas as pd
+
 from bokeh.layouts import column
 from bokeh.models import Range1d
 from bokeh.models.widgets import Button
@@ -192,7 +194,7 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
     x_range_offset = (ulog.last_timestamp - ulog.start_timestamp) * 0.05
     x_range = Range1d(ulog.start_timestamp - x_range_offset, ulog.last_timestamp + x_range_offset)
 
-        # Altitude estimate
+    # Altitude estimate
     data_plot = DataPlot(data, plot_config, 'vehicle_gps_position',
                          y_axis_label='[m]', title='Altitude Estimate',
                          changed_params=changed_params, x_range=x_range)
@@ -206,9 +208,102 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
     data_plot.add_circle(['current.alt'], [plot_config['mission_setpoint_color']],
                         ['Altitude Setpoint'])
     plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
-
+    
     if data_plot.finalize() is not None: plots.append(data_plot)
+    
+    
+        # for axis in ['x', 'y', 'z']:
+        # data_plot = DataPlot(data, plot_config, 'vehicle_local_position',
+        #                      y_axis_label='[m]', title='Local Position '+axis.upper(),
+        #                      plot_height='small', changed_params=changed_params,
+        #                      x_range=x_range)
+        # data_plot.add_graph([axis], colors2[0:1], [axis.upper()+' Estimated'], mark_nan=True)
+        # data_plot.change_dataset('vehicle_local_position_setpoint')
+        # data_plot.add_graph([axis], colors2[1:2], [axis.upper()+' Setpoint'],
+        #                     use_step_lines=True)
+        # plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
 
+        # if data_plot.finalize() is not None: plots.append(data_plot)
+    # Tim plot 
+    axis = 'y'
+    data_plot = DataPlot(data, plot_config, 'vehicle_local_position',
+                         y_axis_label='[normalized]', title='Max Difference of Throttle (all 4 motors) over 1 second moving average and normalized setpoint vs gps altitude',
+                         plot_height='small', changed_params=changed_params,
+                         x_range=x_range)
+
+    # Normalize y position data
+    # Get normalization constants from position data first
+    pos_min = data_plot.dataset.data[axis].min()
+    pos_max = data_plot.dataset.data[axis].max()
+    data_plot.add_graph([lambda data: ('y_norm',
+                        (data[axis] - pos_min) / (pos_max - pos_min))],
+                        colors2[0:1], [axis.upper()+' Estimated'], mark_nan=True)
+    
+    data_plot.change_dataset('vehicle_local_position_setpoint')
+    data_plot.add_graph([lambda data: ('y_norm', (data[axis] - pos_min) / (pos_max - pos_min))],
+                        colors2[1:2], [axis.upper()+' Setpoint'],
+                        use_step_lines=True)
+    
+    data_plot.change_dataset('actuator_motors')
+    data_plot.add_graph([lambda data: ('motor_diff_roll', 
+                        pd.Series(np.max([data['control[0]'], data['control[1]'], 
+                                        data['control[2]'], data['control[3]']], axis=0) - 
+                                 np.min([data['control[0]'], data['control[1]'], 
+                                       data['control[2]'], data['control[3]']], axis=0)).rolling(500).mean().pipe(
+                                           lambda x: (x - x.min()) / (x.max() - x.min())))],
+                        colors8[4:5], ['Motor Diff (50pt rolling avg)'], mark_nan=False)
+
+    plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
+
+    if data_plot.finalize() is not None:
+        style_plot(data_plot.bokeh_plot)
+        plots.append(data_plot)
+        
+        
+    data_plot = DataPlot(data, plot_config, magnetometer_ga_topic,
+                         y_start=0, title='Thrust/Velocity Ratio', plot_height='small',
+                         changed_params=changed_params, x_range=x_range)
+
+    data_plot.change_dataset(actuator_controls_0.thrust_sp_topic)
+    if actuator_controls_0.thrust is not None:
+        thrust_data = actuator_controls_0.thrust
+        thrust_min = np.min(thrust_data)
+        thrust_max = np.max(thrust_data)
+        normalized_thrust = (thrust_data - thrust_min)/(thrust_max - thrust_min)
+        data_plot.add_graph([lambda data: ('thrust', normalized_thrust)],
+                            colors3[1:2], ['Thrust'])
+        
+    data_plot.change_dataset('vehicle_local_position')
+    vz_data = -1 * data_plot.dataset.data['vz'] # Multiply by -1 to invert
+    vz_min = np.min(vz_data)
+    vz_max = np.max(vz_data)
+    normalized_vz = (vz_data - vz_min)/(vz_max - vz_min)
+    data_plot.add_graph([lambda data: ('vz', normalized_vz)],
+                        colors8[0:3], ['Z'])
+    
+    normalized_thrust = np.array((thrust_data - thrust_min) / (thrust_max - thrust_min))
+    normalized_vz = np.array((vz_data - vz_min) / (vz_max - vz_min))
+
+    data_plot.add_graph([lambda data: ('thrust/vz', normalized_thrust / (normalized_vz + 1e-6))],
+                        colors8[0:3], ['Thrust/Velocity Ratio'])
+
+    
+    if data_plot.finalize() is not None:
+        style_plot(data_plot.bokeh_plot)
+        plots.append(data_plot)
+    #         # Velocity
+    # data_plot = DataPlot(data, plot_config, 'vehicle_local_position',
+    #                      y_axis_label='[m/s]', title='Velocity',
+    #                      plot_height='small', changed_params=changed_params,
+    #                      x_range=x_range)
+    # data_plot.add_graph(['vx', 'vy', 'vz'], colors8[0:3], ['X', 'Y', 'Z'])
+    # data_plot.change_dataset('vehicle_local_position_setpoint')
+    # data_plot.add_graph(['vx', 'vy', 'vz'], [colors8[5], colors8[4], colors8[6]],
+    #                     ['X Setpoint', 'Y Setpoint', 'Z Setpoint'], use_step_lines=True)
+    # plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
+
+    # if data_plot.finalize() is not None: plots.append(data_plot)
+                  
     # VTOL tailistter orientation conversion, if relevant
     if is_vtol_tailsitter:
         [tailsitter_attitude, tailsitter_rates, tailsitter_rates_setpoint] = tailsitter_orientation(
