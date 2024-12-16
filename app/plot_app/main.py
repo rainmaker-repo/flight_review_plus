@@ -230,11 +230,11 @@ else:
             link_to_pid_analysis_page = '?plots=pid_analysis&log='+log_id
 
             try:
-                ulog_dir = Path(get_log_filepath())  # Use your log file directory
-                ulog_paths = list(ulog_dir.glob("*.ulg"))
+                # ulog_dir = Path(get_log_filepath())  # Use your log file directory
+                # ulog_paths = list(ulog_dir.glob("*.ulg"))
 
                 # Create gigaplot first
-                gigaplot_layout = create_gigaplot(ulog_paths)
+                gigaplot_layout = create_gigaplot(ulog_file_name)
                 plots = [gigaplot_layout]
 
                 # Add the rest of the plots

@@ -14,7 +14,7 @@ from bokeh.palettes import Viridis256
 from bokeh.models import DatetimeTickFormatter
 
 
-def ulog2masterdf(ulog_paths):
+def ulog2masterdf(ulog_path):
     """
     Converts a list of ULog files into a master DataFrame for visualization.
 
@@ -25,41 +25,41 @@ def ulog2masterdf(ulog_paths):
         pd.DataFrame: Master DataFrame containing merged data from ULog files.
     """
     master_df = pd.DataFrame()
-    base_name = ulog_paths[0].stem
+    # base_name = ulog_paths[0].stem
 
-    for ulog_path in ulog_paths:
-        try:
-            base_name = Path(ulog_path).stem
+    # for ulog_path in ulog_paths:
+    try:
+        base_name = Path(ulog_path).stem
 
             # Parse the ULog file
-            ulog = pyulog.ULog(str(ulog_path))
+        ulog = pyulog.ULog(str(ulog_path))
 
-            for msg in ulog.data_list:
-                df = pd.DataFrame(msg.data)
-                df['timestamp'] = df['timestamp'] / 1e6  # Convert timestamp to seconds
-                df.set_index('timestamp', inplace=True)
-                df.index = pd.to_datetime(df.index, unit='s').round('s')  # Round timestamps
-                df_resampled = df.resample('1s').mean()  # Resample to 1-second intervals
-                df_resampled.reset_index(inplace=True)
+        for msg in ulog.data_list:
+            df = pd.DataFrame(msg.data)
+            df['timestamp'] = df['timestamp'] / 1e6  # Convert timestamp to seconds
+            df.set_index('timestamp', inplace=True)
+            df.index = pd.to_datetime(df.index, unit='s').round('s')  # Round timestamps
+            df_resampled = df.resample('1s').mean()  # Resample to 1-second intervals
+            df_resampled.reset_index(inplace=True)
 
-                # Prefix column names with filename and message name
-                prefixed_columns = {col: f"{base_name}_{msg.name}_{col}" for col in df_resampled.columns if col != 'timestamp'}
-                df_resampled.rename(columns=prefixed_columns, inplace=True)
+            # Prefix column names with filename and message name
+            prefixed_columns = {col: f"{base_name}_{msg.name}_{col}" for col in df_resampled.columns if col != 'timestamp'}
+            df_resampled.rename(columns=prefixed_columns, inplace=True)
 
-                # Merge into the master DataFrame
-                if master_df.empty:
-                    master_df = df_resampled
-                else:
-                    master_df = pd.merge(master_df, df_resampled, on='timestamp', how='outer')
-        except Exception as e:
-            print(f"Error processing {ulog_path}: {e}")
+            # Merge into the master DataFrame
+            if master_df.empty:
+                master_df = df_resampled
+            else:
+                master_df = pd.merge(master_df, df_resampled, on='timestamp', how='outer')
+    except Exception as e:
+        print(f"Error processing {ulog_path}: {e}")
 
     master_df.sort_values(by="timestamp", inplace=True)
     master_df.dropna(how="all", axis=1, inplace=True)
     return master_df
 
 
-def create_gigaplot(ulog_paths):
+def create_gigaplot(ulog_path):
     """
     Creates a Bokeh layout for visualizing ULog data.
 
@@ -70,7 +70,7 @@ def create_gigaplot(ulog_paths):
         bokeh.layouts.row: A Bokeh layout with interactive plots and controls.
     """
     # Generate the master DataFrame
-    master_df = ulog2masterdf(ulog_paths)
+    master_df = ulog2masterdf(ulog_path)
     print("Master DataFrame created.")
 
     # Initialize ColumnDataSource
@@ -150,12 +150,12 @@ def create_gigaplot(ulog_paths):
     x.on_change("value", update)
 
     y_search = TextInput(prefix="Y Axis")
-    y = Select(value=f"{ulog_paths[0].stem}_sensor_gps_altitude_msl_m", options=continuous, margin=(-5,5,15,5))
+    y = Select(value=f"{Path(ulog_path).stem}_sensor_gps_altitude_msl_m", options=continuous, margin=(-5,5,15,5))
     y_search.on_change("value", lambda attr, old, new: update_dropdown(attr, old, new, y_search, y, continuous))
     y.on_change("value", update)
 
     color_search = TextInput(prefix="Color")
-    color = Select(value=f"{ulog_paths[0].stem}_todd_sensor_therm_temp_celcius", options=["None"] + continuous, margin=(-5,5,15,5))
+    color = Select(value=f"{Path(ulog_path).stem}_todd_sensor_therm_temp_celcius", options=["None"] + continuous, margin=(-5,5,15,5))
     color_search.on_change("value", lambda attr, old, new: update_dropdown(attr, old, new, color_search, color, ["None"] + continuous))
     color.on_change("value", update)
 
