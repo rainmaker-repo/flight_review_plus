@@ -4,6 +4,7 @@ import re
 from html import escape
 
 from bokeh.layouts import column, row
+import pandas as pd
 from bokeh.models import Range1d
 from bokeh.models.widgets import Button
 from bokeh.io import curdoc
@@ -253,7 +254,6 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
     x_range_offset = (ulog.last_timestamp - ulog.start_timestamp) * 0.05
     x_range = Range1d(ulog.start_timestamp - x_range_offset, ulog.last_timestamp + x_range_offset)
 
-
     # Altitude estimate
     data_plot = DataPlot(data, plot_config, 'vehicle_gps_position',
                          y_axis_label='[m]', title='Altitude Estimate',
@@ -268,9 +268,102 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
     data_plot.add_circle(['current.alt'], [plot_config['mission_setpoint_color']],
                         ['Altitude Setpoint'])
     plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
-
+    
     if data_plot.finalize() is not None: plots.append(data_plot)
+    
+    
+        # for axis in ['x', 'y', 'z']:
+        # data_plot = DataPlot(data, plot_config, 'vehicle_local_position',
+        #                      y_axis_label='[m]', title='Local Position '+axis.upper(),
+        #                      plot_height='small', changed_params=changed_params,
+        #                      x_range=x_range)
+        # data_plot.add_graph([axis], colors2[0:1], [axis.upper()+' Estimated'], mark_nan=True)
+        # data_plot.change_dataset('vehicle_local_position_setpoint')
+        # data_plot.add_graph([axis], colors2[1:2], [axis.upper()+' Setpoint'],
+        #                     use_step_lines=True)
+        # plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
 
+        # if data_plot.finalize() is not None: plots.append(data_plot)
+    # Tim plot 
+    axis = 'y'
+    data_plot = DataPlot(data, plot_config, 'vehicle_local_position',
+                         y_axis_label='[normalized]', title='Max Difference of Throttle (all 4 motors) over 1 second moving average and normalized setpoint vs gps altitude',
+                         plot_height='small', changed_params=changed_params,
+                         x_range=x_range)
+
+    # Normalize y position data
+    # Get normalization constants from position data first
+    pos_min = data_plot.dataset.data[axis].min()
+    pos_max = data_plot.dataset.data[axis].max()
+    data_plot.add_graph([lambda data: ('y_norm',
+                        (data[axis] - pos_min) / (pos_max - pos_min))],
+                        colors2[0:1], [axis.upper()+' Estimated'], mark_nan=True)
+    
+    data_plot.change_dataset('vehicle_local_position_setpoint')
+    data_plot.add_graph([lambda data: ('y_norm', (data[axis] - pos_min) / (pos_max - pos_min))],
+                        colors2[1:2], [axis.upper()+' Setpoint'],
+                        use_step_lines=True)
+    
+    data_plot.change_dataset('actuator_motors')
+    data_plot.add_graph([lambda data: ('motor_diff_roll', 
+                        pd.Series(np.max([data['control[0]'], data['control[1]'], 
+                                        data['control[2]'], data['control[3]']], axis=0) - 
+                                 np.min([data['control[0]'], data['control[1]'], 
+                                       data['control[2]'], data['control[3]']], axis=0)).rolling(500).mean().pipe(
+                                           lambda x: (x - x.min()) / (x.max() - x.min())))],
+                        colors8[4:5], ['Motor Diff (50pt rolling avg)'], mark_nan=False)
+
+    plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
+
+    if data_plot.finalize() is not None:
+        style_plot(data_plot.bokeh_plot)
+        plots.append(data_plot)
+        
+        
+    data_plot = DataPlot(data, plot_config, magnetometer_ga_topic,
+                         y_start=0, title='Thrust/Velocity Ratio', plot_height='small',
+                         changed_params=changed_params, x_range=x_range)
+
+    data_plot.change_dataset(actuator_controls_0.thrust_sp_topic)
+    if actuator_controls_0.thrust is not None:
+        thrust_data = actuator_controls_0.thrust
+        thrust_min = np.min(thrust_data)
+        thrust_max = np.max(thrust_data)
+        normalized_thrust = (thrust_data - thrust_min)/(thrust_max - thrust_min)
+        data_plot.add_graph([lambda data: ('thrust', normalized_thrust)],
+                            colors3[1:2], ['Thrust'])
+        
+    data_plot.change_dataset('vehicle_local_position')
+    vz_data = -1 * data_plot.dataset.data['vz'] # Multiply by -1 to invert
+    vz_min = np.min(vz_data)
+    vz_max = np.max(vz_data)
+    normalized_vz = (vz_data - vz_min)/(vz_max - vz_min)
+    data_plot.add_graph([lambda data: ('vz', normalized_vz)],
+                        colors8[0:3], ['Z'])
+    
+    normalized_thrust = np.array((thrust_data - thrust_min) / (thrust_max - thrust_min))
+    normalized_vz = np.array((vz_data - vz_min) / (vz_max - vz_min))
+
+    data_plot.add_graph([lambda data: ('thrust/vz', normalized_thrust / (normalized_vz + 1e-6))],
+                        colors8[0:3], ['Thrust/Velocity Ratio'])
+
+    
+    if data_plot.finalize() is not None:
+        style_plot(data_plot.bokeh_plot)
+        plots.append(data_plot)
+    #         # Velocity
+    # data_plot = DataPlot(data, plot_config, 'vehicle_local_position',
+    #                      y_axis_label='[m/s]', title='Velocity',
+    #                      plot_height='small', changed_params=changed_params,
+    #                      x_range=x_range)
+    # data_plot.add_graph(['vx', 'vy', 'vz'], colors8[0:3], ['X', 'Y', 'Z'])
+    # data_plot.change_dataset('vehicle_local_position_setpoint')
+    # data_plot.add_graph(['vx', 'vy', 'vz'], [colors8[5], colors8[4], colors8[6]],
+    #                     ['X Setpoint', 'Y Setpoint', 'Z Setpoint'], use_step_lines=True)
+    # plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
+
+    # if data_plot.finalize() is not None: plots.append(data_plot)
+                  
     # VTOL tailistter orientation conversion, if relevant
     if is_vtol_tailsitter:
         [tailsitter_attitude, tailsitter_rates, tailsitter_rates_setpoint] = tailsitter_orientation(
@@ -853,6 +946,23 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
                         ['X', 'Y', 'Z'])
     if data_plot.finalize() is not None: plots.append(data_plot)
 
+    # magnetic field magnitude
+    data_plot = DataPlot(data, plot_config, magnetometer_ga_topic,
+                         y_axis_label='[gauss]', title='Magnetic Field Magnitude',
+                         plot_height='small', changed_params=changed_params,
+                         x_range=x_range)
+    mag_data = ulog.get_dataset(magnetometer_ga_topic).data
+    mag_magnitude = np.sqrt(mag_data['magnetometer_ga[0]']**2 + 
+                          mag_data['magnetometer_ga[1]']**2 + 
+                          mag_data['magnetometer_ga[2]']**2)
+    mag_data['magnitude'] = mag_magnitude
+    data_plot.add_graph(['magnitude'], colors3[0:1], ['Magnitude'])
+    
+    plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
+    if data_plot.finalize() is not None: 
+        style_plot(data_plot.bokeh_plot)
+        plots.append(data_plot)    
+
 
     # distance sensor
     data_plot = DataPlot(data, plot_config, 'distance_sensor',
@@ -1175,13 +1285,12 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
             plots.append(data_plot)    
     except:
         pass
-    
-    
-    # Windspeed
+
+    # Windspeed Components
     try:
         data_plot = DataPlot(data, plot_config, 'wind',
                              y_axis_label='[m/s]',
-                             title='Wind Speed', plot_height='small', x_range=x_range)
+                             title='Wind Speed Components', plot_height='small', x_range=x_range)
         wind_data = ulog.get_dataset('wind').data
         sampling_diff = np.diff(wind_data['timestamp'])
         min_sampling_diff = np.amin(sampling_diff)
@@ -1197,7 +1306,6 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
         data_plot.add_graph([lambda data: ('wind_magnitude', data['wind_magnitude'])], 
                            colors3[2:3], ['Total Wind Speed'])
         
-        # Set plot ranges to fit data after adding graphs
         data_plot.bokeh_plot.x_range.start = min(wind_data['timestamp'])
         data_plot.bokeh_plot.x_range.end = max(wind_data['timestamp'])
         data_plot.bokeh_plot.y_range.start = 0
@@ -1205,6 +1313,56 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
         
         plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
         if data_plot.finalize() is not None: 
+            style_plot(data_plot.bokeh_plot)
+            plots.append(data_plot)
+    except:
+        pass
+
+    # Wind Speed Magnitude
+    try:
+        data_plot = DataPlot(data, plot_config, 'wind',
+                             y_axis_label='[m/s]',
+                             title='Wind Speed Magnitude', plot_height='small', x_range=x_range)
+        wind_data = ulog.get_dataset('wind').data
+        
+        # Calculate wind speed magnitude
+        wind_magnitude = np.sqrt(wind_data['windspeed_north']**2 + wind_data['windspeed_east']**2)
+        wind_data['wind_magnitude'] = wind_magnitude
+
+        data_plot.add_graph(['wind_magnitude'], colors3[0:1], ['Wind Speed'])
+        
+        data_plot.bokeh_plot.x_range.start = min(wind_data['timestamp'])
+        data_plot.bokeh_plot.x_range.end = max(wind_data['timestamp'])
+        data_plot.bokeh_plot.y_range.start = 0
+        data_plot.bokeh_plot.y_range.end = max(wind_magnitude) * 1.1
+        
+        plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
+        if data_plot.finalize() is not None:
+            style_plot(data_plot.bokeh_plot)
+            plots.append(data_plot)
+    except:
+        pass
+
+    # Wind Direction
+    try:
+        data_plot = DataPlot(data, plot_config, 'wind',
+                             y_axis_label='[deg]',
+                             title='Wind Direction', plot_height='small', x_range=x_range)
+        wind_data = ulog.get_dataset('wind').data
+        
+        # Calculate wind direction in degrees (0-360)
+        wind_direction = np.degrees(np.arctan2(wind_data['windspeed_east'], wind_data['windspeed_north'])) % 360
+        wind_data['wind_direction'] = wind_direction
+
+        data_plot.add_graph(['wind_direction'], colors3[0:1], ['Wind Direction'])
+        
+        data_plot.bokeh_plot.x_range.start = min(wind_data['timestamp'])
+        data_plot.bokeh_plot.x_range.end = max(wind_data['timestamp'])
+        data_plot.bokeh_plot.y_range.start = 0
+        data_plot.bokeh_plot.y_range.end = 360
+        
+        plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
+        if data_plot.finalize() is not None:
             style_plot(data_plot.bokeh_plot)
             plots.append(data_plot)
     except:
@@ -1322,51 +1480,6 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
         plots.append(data_plot)
     
     
-    
-    
-    
-        # Create a new DataPlot instance for the ratio plot
-    # ratio_data_plot = DataPlot(data, plot_config, 'vehicle_local_position',
-    #                         y_start=0, title='AUTO RATIO PLOT',
-    #                         plot_height='small', changed_params=changed_params,
-    #                         x_range=x_range)
-
-    # # Get velocity data and normalize
-    # vel_dataset = ulog.get_dataset('vehicle_local_position')
-    # vel_data = vel_dataset.data['vz']
-    # max_vel = np.max(np.abs(vel_data))
-    # normalized_vel_data = [abs(x)/max_vel * 100 for x in vel_data]
-
-    # # Get thrust data and scale
-    # thrust_dataset = ulog.get_dataset(actuator_controls_0.thrust_sp_topic)
-    # thrust_data = actuator_controls_0.thrust * 100
-
-    # # Align arrays by padding the shorter one
-    # vel_arr = np.array(normalized_vel_data)
-    # thr_arr = np.array(thrust_data)
-    # max_len = max(len(vel_arr), len(thr_arr))
-    # if len(vel_arr) < max_len:
-    #     vel_arr = np.concatenate([vel_arr, np.full(max_len - len(vel_arr), vel_arr[-1])])
-    # elif len(thr_arr) < max_len:
-    #     thr_arr = np.concatenate([thr_arr, np.full(max_len - len(thr_arr), thr_arr[-1])])
-
-    # # Compute ratio and avoid division by zero
-    # epsilon = 1e-9
-    # ratio = vel_arr / (thr_arr + epsilon)
-
-    # def ratio_calc(data):
-    #     # Ensure ratio matches the current dataset length
-    #     length = len(data['vz'])
-    #     return ('ratio', ratio[:length])
-
-    # ratio_data_plot.add_graph([ratio_calc], colors3[3:4], ['Velocity/Thrust Ratio'])
-
-    # if ratio_data_plot.finalize() is not None:
-    #     style_plot(ratio_data_plot.bokeh_plot)
-    #     plots.append(ratio_data_plot)
-
-    
-    
         
     # actuator outputs
     data_plot = DataPlot(data, plot_config, 'actuator_outputs',
@@ -1386,18 +1499,6 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
         style_plot(data_plot.bokeh_plot)
         plots.append(data_plot)         
         
-        
-        
-        
-        
-    # ratio between velocity and thrust
-    vel_dataset = ulog.get_dataset('vehicle_local_position')
-    vel_data = vel_dataset.data['vz'] 
-    
-    ## already normalized
-    thrust_data = actuator_controls_0.thrust_z_neg
-
-    
     
     # battery filtered values
     try:
