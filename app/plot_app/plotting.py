@@ -126,7 +126,7 @@ def plot_parameter_changes(p, plots_height, changed_parameters):
     return None
 
 
-def plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states=None):
+def plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states=None, ads_states=None):
     """ plot flight modes as filling background (with different colors) to a
     DataPlot object """
     vtol_state_height = 40
@@ -143,43 +143,60 @@ def plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states=Non
     if data_plot.has_param_change_labels:
         # make sure there's no overlap with changed parameter labels
         labels_y_offset -= 10 + 4 * 10
-
-    for i in range(len(flight_mode_changes)-1):
-        t_start, mode = flight_mode_changes[i]
-        t_end, mode_next = flight_mode_changes[i + 1]
-        if mode in flight_modes_table:
-            mode_name, color = flight_modes_table[mode]
+        
+    if ads_states is not None:
+        # Plot ADS states instead of flight modes
+        for i in range(len(ads_states)-1):
+            t_start, state = ads_states[i]
+            t_end = ads_states[i + 1][0]
+            color = '#1f77b4' if state else '#d3d3d3'  # Blue when running, gray when not
+            name = 'ADS Running' if state else 'ADS Off'
+            
             annotation = BoxAnnotation(left=int(t_start), right=int(t_end),
-                                       fill_alpha=0.09, line_color=None,
-                                       fill_color=color,
-                                       **added_box_annotation_args)
+                                     fill_alpha=0.09, line_color=None,
+                                     fill_color=color,
+                                     **added_box_annotation_args)
             p.add_layout(annotation)
 
-            if flight_mode_changes[i+1][0] - t_start > 1e6: # filter fast
-                                                 # switches to avoid overlap
-                labels_text.append(mode_name)
+            if t_end - t_start > 1e6:  # filter fast switches to avoid overlap
+                labels_text.append(name)
                 labels_x_pos.append(t_start)
                 labels_y_pos.append(labels_y_offset)
                 labels_color.append(color)
+    else:
+        # Original flight mode plotting logic
+        for i in range(len(flight_mode_changes)-1):
+            t_start, mode = flight_mode_changes[i]
+            t_end = flight_mode_changes[i + 1][0]
+            if mode in flight_modes_table:
+                mode_name, color = flight_modes_table[mode]
+                annotation = BoxAnnotation(left=int(t_start), right=int(t_end),
+                                         fill_alpha=0.09, line_color=None,
+                                         fill_color=color,
+                                         **added_box_annotation_args)
+                p.add_layout(annotation)
 
+                if t_end - t_start > 1e6:  # filter fast switches to avoid overlap
+                    labels_text.append(mode_name)
+                    labels_x_pos.append(t_start)
+                    labels_y_pos.append(labels_y_offset)
+                    labels_color.append(color)
 
-    # plot flight mode names as labels
-    # they're only visible when the mouse is over the plot
+    # plot mode names as labels
     if len(labels_text) > 0:
         source = ColumnDataSource(data={'x': labels_x_pos, 'text': labels_text,
-                                        'y': labels_y_pos, 'textcolor': labels_color})
+                                      'y': labels_y_pos, 'textcolor': labels_color})
         labels = LabelSet(x='x', y='y', text='text',
-                          y_units='screen', level='underlay',
-                          source=source,
-                          text_font_size='10pt',
-                          text_color='textcolor', text_alpha=0.85,
-                          background_fill_color='white',
-                          background_fill_alpha=0.8, angle=90/180*np.pi,
-                          text_align='right', text_baseline='top')
-        labels.visible = False # initially hidden
+                         y_units='screen', level='underlay',
+                         source=source,
+                         text_font_size='10pt',
+                         text_color='textcolor', text_alpha=0.85,
+                         background_fill_color='white',
+                         background_fill_alpha=0.8, angle=90/180*np.pi,
+                         text_align='right', text_baseline='top')
+        labels.visible = False  # initially hidden
         p.add_layout(labels)
 
-        # callback doc: https://bokeh.pydata.org/en/latest/docs/user_guide/interaction/callbacks.html
         code = """
         labels.visible = cb_obj.event_name == "mouseenter";
         """
@@ -187,7 +204,7 @@ def plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states=Non
         p.js_on_event(events.MouseEnter, callback)
         p.js_on_event(events.MouseLeave, callback)
 
-
+    # VTOL state plotting remains unchanged
     if vtol_states is not None:
         for i in range(len(vtol_states)-1):
             t_start, mode = vtol_states[i]
