@@ -493,6 +493,33 @@ def get_flight_mode_changes(ulog):
         flight_mode_changes = []
     return flight_mode_changes
 
+def get_ads_run_state(ulog, rpm_threshold=500):
+    """
+    Get ADS run state changes based on RPM threshold
+    :return: list of (timestamp, bool state) tuples, the last is the last log timestamp and state = False
+    """
+    try:
+        dataset = ulog.get_dataset('actuator_outputs')
+        timestamps = dataset.data['timestamp']
+        rpm = dataset.data['output[4]']
+        
+        # Convert RPM to boolean states
+        states = rpm > rpm_threshold
+        
+        # Find state changes
+        state_changes = []
+        prev_state = None
+        for i, (t, state) in enumerate(zip(timestamps, states)):
+            if state != prev_state:
+                state_changes.append((t, bool(state)))
+                prev_state = state
+                
+        # Add final state
+        state_changes.append((ulog.last_timestamp, False))
+        return state_changes
+    except (KeyError, IndexError) as error:
+        return []
+
 def print_cache_info():
     """ print information about the ulog cache """
     print(load_ulog_file.cache_info())
