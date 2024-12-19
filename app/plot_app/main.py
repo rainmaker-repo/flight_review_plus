@@ -234,8 +234,8 @@ else:
                 # ulog_paths = list(ulog_dir.glob("*.ulg"))
 
                 # Create gigaplot first
-                gigaplot_layout = create_gigaplot(ulog_file_name)
-                plots = [gigaplot_layout]
+                # gigaplot_layout = create_gigaplot(ulog_file_name)
+                plots = []
 
                 # Add the rest of the plots
                 plots.extend(generate_plots(ulog, px4_ulog, db_data, vehicle_data,
