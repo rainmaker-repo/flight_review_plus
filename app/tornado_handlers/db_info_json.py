@@ -2,10 +2,12 @@
 Tornado handler for the JSON public log list retrieval
 """
 from __future__ import print_function
+
 import json
-import sqlite3
 import os
+import sqlite3
 import sys
+
 import tornado.web
 
 # this is needed for the following imports
@@ -13,7 +15,6 @@ sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../pl
 from config import get_db_filename
 from db_entry import DBData
 from helper import get_airframe_data
-
 
 #pylint: disable=relative-beyond-top-level
 from .common import get_generated_db_data_from_log
@@ -37,8 +38,9 @@ class DBInfoHandler(tornado.web.RequestHandler):
         db_tuples = cur.fetchall()
         vehicle_table = {db_tuple[0]: db_tuple[1] for db_tuple in db_tuples}
 
-        cur.execute('SELECT Id, Date, Description, WindSpeed, Rating, VideoUrl, ErrorLabels, '
-                    'Source, Feedback, Type FROM Logs WHERE Public = 1 AND NOT Source = "CI"')
+        cur.execute('SELECT Logs.Id, Logs.Date, Description, WindSpeed, Rating, VideoUrl, ErrorLabels, '
+                    'Source, Feedback, Type, LogsGenerated.StartTime FROM Logs LEFT JOIN LogsGenerated on Logs.Id=LogsGenerated.Id '
+                    'WHERE Public = 1 AND NOT Source = "CI"')
         # need to fetch all here, because we will do more SQL calls while
         # iterating (having multiple cursor's does not seem to work)
         db_tuples = cur.fetchall()
@@ -47,7 +49,8 @@ class DBInfoHandler(tornado.web.RequestHandler):
             db_data = DBData()
             log_id = db_tuple[0]
             jsondict['log_id'] = log_id
-            jsondict['log_date'] = db_tuple[1].strftime('%Y-%m-%d')
+            jsondict['log_date'] = db_tuple[1].strftime('%Y-%m-%d %H:%M:%S')
+            jsondict['log_start_time'] = db_tuple[10]
             db_data.description = db_tuple[2]
             db_data.wind_speed = db_tuple[3]
             db_data.rating = db_tuple[4]
