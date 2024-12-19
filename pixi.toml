@@ -1,0 +1,22 @@
+[project]
+channels = ["conda-forge"]
+description = "Add a short description here"
+name = "flight_review_plus"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+bokeh = "==3.3.2"
+jinja2 = "*"
+jupyter = "*"
+pyfftw = "*"
+pylint = "*"
+requests = "*"
+scipy = ">=1.8.1"
+simplekml = "*"
+smopy = "*"
+
+[pypi-dependencies]
+pyulog = ">=1.1"
