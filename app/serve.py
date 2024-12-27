@@ -27,6 +27,7 @@ from tornado_handlers.db_info_json import DBInfoHandler
 from tornado_handlers.three_d import ThreeDHandler
 from tornado_handlers.radio_controller import RadioControllerHandler
 from tornado_handlers.error_labels import UpdateErrorLabelHandler
+from tornado_handlers.hwid_mappings import HWIDMappingsHandler
 
 from helper import set_log_id_is_filename, print_cache_info #pylint: disable=C0411
 from config import debug_print_timing, get_overview_img_filepath #pylint: disable=C0411
@@ -125,6 +126,7 @@ extra_patterns = [
     (r'/error_label', UpdateErrorLabelHandler),
     (r"/stats", RedirectHandler, {"url": "/plot_app?stats=1"}),
     (r'/overview_img/(.*)', StaticFileHandler, {'path': get_overview_img_filepath()}),
+    (r'/hwid-sn-mappings', HWIDMappingsHandler),
 ]
 
 server = None

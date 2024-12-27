@@ -144,5 +144,16 @@ with con:
                 "FlightTime INTEGER, " # latest flight time in seconds
                 "CONSTRAINT UUID_PK PRIMARY KEY (UUID))")
 
+    # HWIDMappings table
+    cur.execute("PRAGMA table_info('HWIDMappings')")
+    columns = cur.fetchall()
+
+    if len(columns) == 0:
+        cur.execute("""CREATE TABLE HWIDMappings(
+            HardwareId TEXT PRIMARY KEY,
+            SerialNumber TEXT NOT NULL,
+            CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""")
+
 con.close()
 
