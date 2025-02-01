@@ -3,23 +3,24 @@
 import re
 from html import escape
 
-from bokeh.layouts import column, row
 import pandas as pd
+from bokeh.io import curdoc
+from bokeh.layouts import column, row
 from bokeh.models import Range1d
 from bokeh.models.widgets import Button
-from bokeh.io import curdoc
-from bokeh.themes import Theme
-
 from config import *
 from helper import *
 from leaflet import ulog_to_polyline
-from plotting import *
 from plotted_tables import (
-    get_logged_messages, get_changed_parameters,
-    get_info_table_html, get_heading_html, get_error_labels_html,
-    get_hardfault_html, get_corrupt_log_html
-    )
-
+    get_changed_parameters,
+    get_corrupt_log_html,
+    get_error_labels_html,
+    get_hardfault_html,
+    get_heading_html,
+    get_info_table_html,
+    get_logged_messages,
+)
+from plotting import *
 from vtol_tailsitter import *
 
 #pylint: disable=cell-var-from-loop, undefined-loop-variable,
@@ -191,7 +192,7 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
                     vtol_states[i] = (t, vtol_state_mapping[
                         cur_dataset.data[vehicle_type_field][idx]])
             vtol_states.append((ulog.last_timestamp, -1))
-    except (KeyError, IndexError) as error:
+    except (KeyError, IndexError):
         vtol_states = None
 
 
@@ -244,7 +245,7 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
 
     # initialize parameter changes
     changed_params = None
-    if not 'replay' in ulog.msg_info_dict: # replay can have many param changes
+    if 'replay' not in ulog.msg_info_dict: # replay can have many param changes
         if len(ulog.changed_parameters) > 0:
             changed_params = ulog.changed_parameters
             plots.append(None) # save space for the param change button
@@ -589,7 +590,7 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
             plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
 
             if data_plot.finalize() is not None: plots.append(data_plot)
-    except (KeyError, IndexError) as error:
+    except (KeyError, IndexError):
         pass
 
     # TECS (fixed-wing or VTOLs)
@@ -1449,35 +1450,36 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page,
     
 
         # current vs thrust# Thrust vs Wind Speed
-    data_plot = DataPlot(data, plot_config, 'wind', 
-                        title='ICING -- Does thrust increase while holding, accounting for wind speed?', 
-                        plot_height='small',
-                        changed_params=changed_params,
-                        x_range=x_range)
+    try:
+        data_plot = DataPlot(data, plot_config, 'wind', 
+                            title='ICING -- Does thrust increase while holding, accounting for wind speed?', 
+                            plot_height='small',
+                            changed_params=changed_params,
+                            x_range=x_range)
 
-    # Get wind data and calculate magnitude
-    wind_data = ulog.get_dataset('wind').data
-    wind_magnitude = np.sqrt(wind_data['windspeed_north']**2 + wind_data['windspeed_east']**2)
-    data_plot.add_graph([lambda data: ('wind_magnitude', wind_magnitude)],
-                        colors3[0:1], ['Wind Speed [m/s]'])
+        # Get wind data and calculate magnitude
+        wind_data = ulog.get_dataset('wind').data
+        wind_magnitude = np.sqrt(wind_data['windspeed_north']**2 + wind_data['windspeed_east']**2)
+        data_plot.add_graph([lambda data: ('wind_magnitude', wind_magnitude)],
+                            colors3[0:1], ['Wind Speed [m/s]'])
 
-    # Add thrust data
-    data_plot.change_dataset(actuator_controls_0.thrust_sp_topic)
-    thrust_data = (actuator_controls_0.thrust * 100) - 30
-    data_plot.add_graph([lambda data: ('thrust', thrust_data)],
-                        colors3[1:2], ['Thrust [%]'])
-    
-    # Add vertical velocity data
-    data_plot.change_dataset('vehicle_local_position')
-    data_plot.add_graph(['vz'], colors3[2:3], ['Vertical Velocity [m/s]'])
-    
+        # Add thrust data
+        data_plot.change_dataset(actuator_controls_0.thrust_sp_topic)
+        thrust_data = (actuator_controls_0.thrust * 100) - 30
+        data_plot.add_graph([lambda data: ('thrust', thrust_data)],
+                            colors3[1:2], ['Thrust [%]'])
+        
+        # Add vertical velocity data
+        data_plot.change_dataset('vehicle_local_position')
+        data_plot.add_graph(['vz'], colors3[2:3], ['Vertical Velocity [m/s]'])
 
+        plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
 
-    plot_flight_modes_background(data_plot, flight_mode_changes, vtol_states)
-
-    if data_plot.finalize() is not None:
-        style_plot(data_plot.bokeh_plot)
-        plots.append(data_plot)
+        if data_plot.finalize() is not None:
+            style_plot(data_plot.bokeh_plot)
+            plots.append(data_plot)
+    except Exception as e:
+        pass
     
     
         
